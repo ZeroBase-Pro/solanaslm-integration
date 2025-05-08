@@ -2,7 +2,7 @@ const {writeFile} = require("fs/promises");
 const assert = require("assert");
 const {findClaimLocation} = require("./claim_loc.js");
 const {getPubkeyFromV1Certs} = require("./X509_PEM.js");
-const {MAX_NONCE_BYTES, MAX_EMAIL_BYTES } = require("./constants.js");
+const {MAX_NONCE_BYTES, MAX_EMAIL_BYTES, MAX_EMAIL_VERIFIED_BYTES } = require("./constants.js");
 const CryptoJS = require('crypto');
 
 
@@ -25,6 +25,7 @@ const generate_data = (jwtToken) => {
     sig: signature,
     nonce: decodedPayload.authNonce,
     email: decodedPayload.email,
+    email_verified: decodedPayload.email_verified,
   };
   return data;
 }
@@ -128,6 +129,7 @@ const createInputs = async (data, highpartPK, lowpartPK, exp, project_id) => {
   const jwt_sha256 = uint8ToBits(shaHash(new TextEncoder().encode(msg)));
   const nonceClaim = findClaimLocation(data.jwt, data.nonce, MAX_NONCE_BYTES);
   const emailClaim = findClaimLocation(data.jwt, data.email, MAX_EMAIL_BYTES);
+  const email_verifiedClaim = findClaimLocation(data.jwt, data.email_verified, MAX_EMAIL_VERIFIED_BYTES);
   const rsaPubkey = toCircomBigIntBytes(await getPubkeyFromV1Certs(data.jwt));
 
   const inputs = {
@@ -137,6 +139,8 @@ const createInputs = async (data, highpartPK, lowpartPK, exp, project_id) => {
     nonce_loc: nonceClaim[1],
     email: emailClaim[0],
     email_loc: emailClaim[1],
+    email_verified: email_verifiedClaim[0],
+    email_verified_loc: email_verifiedClaim[1],
     highpartPK: highpartPK.toString(),
     lowpartPK: lowpartPK.toString(),
     exp: BigInt(exp).toString(),

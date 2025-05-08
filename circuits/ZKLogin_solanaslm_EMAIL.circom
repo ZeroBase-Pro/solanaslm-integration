@@ -12,12 +12,17 @@ include "./zk-email/circuits/lib/circomlib/circuits/poseidon.circom";
 /// 3. Base64 decode the `nonce` fields into ascii numbers.
 /// 4. Check `nonce` == Poseidon([highpartPK, lowpartPK, exp, project_id]).
 /// 5. Output the public input `highpartPK, lowpartPK, exp, project_id`.
+/// 6. Ensure the `email_verified` is `true` in the JWT token.
 ///
 /// Inputs:
 /// - `jwt_segments`: Pad the JWT and split it into multiple segments to boost efficiency.
+/// - `jwt_sha256`: The SHA256 hash of the JWT.
 /// - `nonce`: Extract the base64 byte array of the `nonce` field from the JWT, verify the correctness.
 /// - `email`: Extract the base64 byte array of the `email` field from the JWT.
+/// - `email_verified`: Extract the base64 byte array of the `email_verified` field from the JWT.
+/// - `email_loc`: The position of `email` in the JWT.
 /// - `nonce_loc`: The position of `nonce` in the JWT.
+/// - `email_verified_loc`: The position of `email_verified` in the JWT.
 /// - `signature`: Convert the Base64-encoded JWT signature string to a BigInt array that can be processed by the Circom circuit.
 /// - `modulus`: Extract the JWT `kid` field in the header to apply to the Google API for the public key to verify the JWT signature.
 /// - `highpartPK, lowpartPK`: Custom solana public key of Bigint type. 
@@ -30,8 +35,10 @@ include "./zk-email/circuits/lib/circomlib/circuits/poseidon.circom";
 template ZKLogin(
   nonce_claim_bytes,
   email_claim_bytes,
+  email_verified_claim_bytes,
   nonce_bytes,
   email_bytes,
+  email_verified_bytes,
   jwt_chunk_size,
   chunk_count,
   n, k
@@ -41,8 +48,10 @@ template ZKLogin(
     signal input jwt_sha256[256];
     signal input nonce[nonce_claim_bytes];//Nonce, the plaintext length is tentatively set to 79
     signal input email[email_claim_bytes]; // email
+    signal input email_verified[email_verified_claim_bytes]; // email_verified
     signal input email_loc;
     signal input nonce_loc;
+    signal input email_verified_loc;
     signal input signature[k];
     signal input modulus[k]; 
 
@@ -106,10 +115,10 @@ template ZKLogin(
 
     signal move_temp_email[41];
     signal email_num[40];
-    signal isColon_email_0 <== IsEqual()([email_ascii[0],58]); //1 means equal, 0 means unequal
-    signal isColon_email_1 <== IsEqual()([email_ascii[1],58]); //1 means equal, 0 means unequal
-    signal isQuote_email_0 <== IsEqual()([email_ascii[0],34]); //1 means equal, 0 means unequal
-    signal isQuote_email_1 <== IsEqual()([email_ascii[1],34]); //1 means equal, 0 means unequal
+    signal isColon_email_0 <== IsEqual()([email_ascii[0],58]); 
+    signal isColon_email_1 <== IsEqual()([email_ascii[1],58]); 
+    signal isQuote_email_0 <== IsEqual()([email_ascii[0],34]); 
+    signal isQuote_email_1 <== IsEqual()([email_ascii[1],34]); 
 
     component mux1_email[41];
     component mux2_email[40];
@@ -144,7 +153,62 @@ template ZKLogin(
     email_hash.inputs[0] <== email_out_ascii[0];
     email_hash.inputs[1] <== email_out_ascii[1];
     email_out_ascii_hash <== email_hash.out;
+
+    //-------------------------------------------
+    // 2.3 email_verified claims inclusions
+    signal email_verified_ascii[email_verified_bytes] <== ClaimInclusion(
+      email_verified_claim_bytes, email_verified_bytes, jwt_chunk_size, chunk_count
+    )(jwt_segments, email_verified, email_verified_loc);
+
+    component is_equal[12];
+    signal find_true[3];
+    is_equal[0] = IsEqual(); 
+    is_equal[0].in[0] <== email_verified_ascii[0];
+    is_equal[0].in[1] <== 116;
+    is_equal[1] = IsEqual(); 
+    is_equal[1].in[0] <== email_verified_ascii[1];
+    is_equal[1].in[1] <== 114;
+    is_equal[2] = IsEqual(); 
+    is_equal[2].in[0] <== email_verified_ascii[2];
+    is_equal[2].in[1] <== 117;
+    is_equal[3] = IsEqual(); 
+    is_equal[3].in[0] <== email_verified_ascii[3];
+    is_equal[3].in[1] <== 101;
+    find_true[0] <== is_equal[0].out + is_equal[1].out + is_equal[2].out + is_equal[3].out;
+
+    is_equal[4] = IsEqual(); 
+    is_equal[4].in[0] <== email_verified_ascii[1];
+    is_equal[4].in[1] <== 116;
+    is_equal[5] = IsEqual(); 
+    is_equal[5].in[0] <== email_verified_ascii[2];
+    is_equal[5].in[1] <== 114;
+    is_equal[6] = IsEqual(); 
+    is_equal[6].in[0] <== email_verified_ascii[3];
+    is_equal[6].in[1] <== 117;
+    is_equal[7] = IsEqual(); 
+    is_equal[7].in[0] <== email_verified_ascii[4];
+    is_equal[7].in[1] <== 101;
+    find_true[1] <== is_equal[4].out + is_equal[5].out + is_equal[6].out + is_equal[7].out;
+
+    is_equal[8] = IsEqual(); 
+    is_equal[8].in[0] <== email_verified_ascii[2];
+    is_equal[8].in[1] <== 116;
+    is_equal[9] = IsEqual(); 
+    is_equal[9].in[0] <== email_verified_ascii[3];
+    is_equal[9].in[1] <== 114;
+    is_equal[10] = IsEqual(); 
+    is_equal[10].in[0] <== email_verified_ascii[4];
+    is_equal[10].in[1] <== 117;
+    is_equal[11] = IsEqual(); 
+    is_equal[11].in[0] <== email_verified_ascii[5];
+    is_equal[11].in[1] <== 101;
+    find_true[2] <== is_equal[8].out + is_equal[9].out + is_equal[10].out + is_equal[11].out;
+    signal find_true_sum <== find_true[0] + find_true[1] + find_true[2];
+    find_true_sum === 4;
+    find_true[0] * find_true[1] === 0;
+    find_true[0] * find_true[2] === 0;
+    find_true[1] * find_true[2] === 0;
 }
 
 
-component main{ public [project_id, highpartPK, lowpartPK, exp]} = ZKLogin(108, 56, 79, 42, 16, 64, 121, 17);
+component main{ public [project_id, highpartPK, lowpartPK, exp]} = ZKLogin(108, 56, 8, 79, 42, 6, 16, 64, 121, 17);

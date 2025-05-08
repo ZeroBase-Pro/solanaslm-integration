@@ -5,4 +5,5 @@ module.exports = {
 
   MAX_NONCE_BYTES: 108,
   MAX_EMAIL_BYTES: 56,
+  MAX_EMAIL_VERIFIED_BYTES: 8,
 }
