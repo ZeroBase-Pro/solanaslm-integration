@@ -12,12 +12,15 @@ include "./zk-email/circuits/lib/circomlib/circuits/poseidon.circom";
 /// 3. Base64 decode the `nonce` fields into ascii numbers.
 /// 4. Check `nonce` == Poseidon([highpartPK, lowpartPK, exp, project_id]).
 /// 5. Output the public input `highpartPK, lowpartPK, exp, project_id`.
+/// 6. Output the `phone` fields into hash.
 ///
 /// Inputs:
 /// - `jwt_segments`: Pad the JWT and split it into multiple segments to boost efficiency.
+/// - `jwt_sha256`: The SHA256 hash of the JWT.
 /// - `nonce`: Extract the base64 byte array of the `nonce` field from the JWT, verify the correctness.
 /// - `phone`: Extract the base64 byte array of the `phone` field from the JWT.
 /// - `nonce_loc`: The position of `nonce` in the JWT.
+/// - `phone_loc`: The position of `phone` in the JWT.
 /// - `signature`: Convert the Base64-encoded JWT signature string to a BigInt array that can be processed by the Circom circuit.
 /// - `modulus`: Extract the JWT `kid` field in the header to apply to the Google API for the public key to verify the JWT signature.
 /// - `highpartPK, lowpartPK`: Custom solana public key of Bigint type. 

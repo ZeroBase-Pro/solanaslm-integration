@@ -1,6 +1,6 @@
 pragma circom 2.1.6;
 
-include "./crypto/rsa_no_sha256.circom";
+include "./crypto/rsa_check.circom";
 include "./jwt/claim_inclusion.circom";
 include "./utils/concat.circom";
 include "./utils/checknonce.circom";
@@ -13,6 +13,7 @@ include "./zk-email/circuits/lib/circomlib/circuits/poseidon.circom";
 /// 4. Check `nonce` == Poseidon([highpartPK, lowpartPK, exp, project_id]).
 /// 5. Output the public input `highpartPK, lowpartPK, exp, project_id`.
 /// 6. Ensure the `email_verified` is `true` in the JWT token.
+/// 7. Output the `email` fields into hash.
 ///
 /// Inputs:
 /// - `jwt_segments`: Pad the JWT and split it into multiple segments to boost efficiency.
