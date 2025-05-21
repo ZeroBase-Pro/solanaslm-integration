@@ -1,10 +1,7 @@
 # Workflow
 
 The following description applies to the circuit version that uses the OAuth public key as a public input.
-
 ### ![Workflow](./img/workflow.png)
-
-
 # Oracle Service Overview
 
 The off‐chain Oracle is responsible for updating the Google OAuth public key in the AA contract so that the AA contract can obtain the associated Google public key from the public outputs of Proof Verify. Its specific duties include:

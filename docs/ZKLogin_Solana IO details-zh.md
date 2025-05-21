@@ -1,9 +1,7 @@
 # 业务流程
 
 如下叙述适用为将oauth公钥作为公开输入的电路版本。
-
 ### ![流程图](./img/workflow.png)
-
 # Oracle功能介绍
 
 链下Oracle负责将谷歌Oauth的公钥更新到AA合约中，以便AA合约从Proof Verify结果的公开输出中获取证明的关联谷歌公钥。具体职责包括：
