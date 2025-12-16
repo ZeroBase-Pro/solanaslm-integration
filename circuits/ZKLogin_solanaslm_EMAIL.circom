@@ -7,32 +7,6 @@ include "./utils/checknonce.circom";
 include "./zk-email/circuits/lib/circomlib/circuits/poseidon.circom";
 
 
-/// 1. This circuit verifies the JWT signature (RSA256) by given modulus.
-/// 2. Ensure the encoded `nonce` is included in the JWT token, verify the correctness of nonce.
-/// 3. Base64 decode the `nonce` fields into ascii numbers.
-/// 4. Check `nonce` == Poseidon([highpartPK, lowpartPK, exp, project_id]).
-/// 5. Output the public input `highpartPK, lowpartPK, exp, project_id`.
-/// 6. Ensure the `email_verified` is `true` in the JWT token.
-/// 7. Output the `email` fields into hash.
-///
-/// Inputs:
-/// - `jwt_segments`: Pad the JWT and split it into multiple segments to boost efficiency.
-/// - `jwt_sha256`: The SHA256 hash of the JWT.
-/// - `nonce`: Extract the base64 byte array of the `nonce` field from the JWT, verify the correctness.
-/// - `email`: Extract the base64 byte array of the `email` field from the JWT.
-/// - `email_verified`: Extract the base64 byte array of the `email_verified` field from the JWT.
-/// - `email_loc`: The position of `email` in the JWT.
-/// - `nonce_loc`: The position of `nonce` in the JWT.
-/// - `email_verified_loc`: The position of `email_verified` in the JWT.
-/// - `signature`: Convert the Base64-encoded JWT signature string to a BigInt array that can be processed by the Circom circuit.
-/// - `modulus`: Extract the JWT `kid` field in the header to apply to the Google API for the public key to verify the JWT signature.
-/// - `highpartPK, lowpartPK`: Custom solana public key of Bigint type. 
-/// - `exp`: Custom public input as a preimage of the `nonce`.
-/// - `project_id`: Custom public input as a preimage of the `nonce`.
-///
-/// Outputs:
-/// - `email_out_ascii_hash`: The hash value of the `email` field. Details refer to the output document.
-
 template ZKLogin(
   nonce_claim_bytes,
   email_claim_bytes,
@@ -116,10 +90,10 @@ template ZKLogin(
 
     signal move_temp_email[41];
     signal email_num[40];
-    signal isColon_email_0 <== IsEqual()([email_ascii[0],58]); 
-    signal isColon_email_1 <== IsEqual()([email_ascii[1],58]); 
-    signal isQuote_email_0 <== IsEqual()([email_ascii[0],34]); 
-    signal isQuote_email_1 <== IsEqual()([email_ascii[1],34]); 
+    signal isColon_email_0 <== IsEqual()([email_ascii[0],58]); //1 means equal, 0 means unequal
+    signal isColon_email_1 <== IsEqual()([email_ascii[1],58]); //1 means equal, 0 means unequal
+    signal isQuote_email_0 <== IsEqual()([email_ascii[0],34]); //1 means equal, 0 means unequal
+    signal isQuote_email_1 <== IsEqual()([email_ascii[1],34]); //1 means equal, 0 means unequal
 
     component mux1_email[41];
     component mux2_email[40];
@@ -137,6 +111,22 @@ template ZKLogin(
         mux2_email[i].s <== isColon_email_1 + isQuote_email_1; 
         email_num[i] <== mux2_email[i].out;
     }
+
+    component clear_Quote_Comma[40];
+    signal clear_Quote[40];
+    signal clear_Comma[40];
+    signal clear_email_num[40];
+
+    for(var i = 0; i < 40; i++ ){
+        clear_Comma[i] <== IsEqual()([email_num[i],44]);
+        clear_Quote[i] <== IsEqual()([email_num[i],34]);
+        clear_Quote_Comma[i] = Mux1(); 
+        clear_Quote_Comma[i].c[0] <== email_num[i];
+        clear_Quote_Comma[i].c[1] <== 0;
+        clear_Quote_Comma[i].s <== clear_Comma[i]+clear_Quote[i];
+        clear_email_num[i] <== clear_Quote_Comma[i].out;
+    }
+
     signal email_out_ascii[2];
     component concat_email[2];
     concat_email[0] = ConcatDigits(3, 21); //Set each ASCII to 3 bits and splice them together. So the first number must be three digits, manually set to 200
@@ -144,8 +134,8 @@ template ZKLogin(
     concat_email[0].digits[0] <== 200;
     concat_email[1].digits[0] <== 200;
     for (var i = 1; i < 21; i++) {
-        concat_email[0].digits[i] <== email_num[i-1];//email_num[0:20]
-        concat_email[1].digits[i] <== email_num[i+19];//email_num[20:40]
+        concat_email[0].digits[i] <== clear_email_num[i-1];//clear_email_num[0:20]
+        concat_email[1].digits[i] <== clear_email_num[i+19];//clear_email_num[20:40]
     }
     email_out_ascii[0] <== concat_email[0].result;
     email_out_ascii[1] <== concat_email[1].result;
@@ -155,6 +145,7 @@ template ZKLogin(
     email_hash.inputs[1] <== email_out_ascii[1];
     email_out_ascii_hash <== email_hash.out;
 
+
     //-------------------------------------------
     // 2.3 email_verified claims inclusions
     signal email_verified_ascii[email_verified_bytes] <== ClaimInclusion(
@@ -163,52 +154,53 @@ template ZKLogin(
 
     component is_equal[12];
     signal find_true[3];
-    is_equal[0] = IsEqual(); 
+    is_equal[0] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[0].in[0] <== email_verified_ascii[0];
     is_equal[0].in[1] <== 116;
-    is_equal[1] = IsEqual(); 
+    is_equal[1] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[1].in[0] <== email_verified_ascii[1];
     is_equal[1].in[1] <== 114;
-    is_equal[2] = IsEqual(); 
+    is_equal[2] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[2].in[0] <== email_verified_ascii[2];
     is_equal[2].in[1] <== 117;
-    is_equal[3] = IsEqual(); 
+    is_equal[3] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[3].in[0] <== email_verified_ascii[3];
     is_equal[3].in[1] <== 101;
     find_true[0] <== is_equal[0].out + is_equal[1].out + is_equal[2].out + is_equal[3].out;
 
-    is_equal[4] = IsEqual(); 
+    is_equal[4] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[4].in[0] <== email_verified_ascii[1];
     is_equal[4].in[1] <== 116;
-    is_equal[5] = IsEqual(); 
+    is_equal[5] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[5].in[0] <== email_verified_ascii[2];
     is_equal[5].in[1] <== 114;
-    is_equal[6] = IsEqual(); 
+    is_equal[6] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[6].in[0] <== email_verified_ascii[3];
     is_equal[6].in[1] <== 117;
-    is_equal[7] = IsEqual(); 
+    is_equal[7] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[7].in[0] <== email_verified_ascii[4];
     is_equal[7].in[1] <== 101;
     find_true[1] <== is_equal[4].out + is_equal[5].out + is_equal[6].out + is_equal[7].out;
 
-    is_equal[8] = IsEqual(); 
+    is_equal[8] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[8].in[0] <== email_verified_ascii[2];
     is_equal[8].in[1] <== 116;
-    is_equal[9] = IsEqual(); 
+    is_equal[9] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[9].in[0] <== email_verified_ascii[3];
     is_equal[9].in[1] <== 114;
-    is_equal[10] = IsEqual(); 
+    is_equal[10] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[10].in[0] <== email_verified_ascii[4];
     is_equal[10].in[1] <== 117;
-    is_equal[11] = IsEqual(); 
+    is_equal[11] = IsEqual(); //1 means equal, 0 means unequal
     is_equal[11].in[0] <== email_verified_ascii[5];
     is_equal[11].in[1] <== 101;
     find_true[2] <== is_equal[8].out + is_equal[9].out + is_equal[10].out + is_equal[11].out;
     signal find_true_sum <== find_true[0] + find_true[1] + find_true[2];
-    find_true_sum === 4;
+    find_true_sum === 4; // email_verified is true or false, only one of them is true
     find_true[0] * find_true[1] === 0;
     find_true[0] * find_true[2] === 0;
     find_true[1] * find_true[2] === 0;
+   
 }
 
 

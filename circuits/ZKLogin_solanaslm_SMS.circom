@@ -7,29 +7,6 @@ include "./utils/checknonce.circom";
 include "./zk-email/circuits/lib/circomlib/circuits/poseidon.circom";
 
 
-/// 1. This circuit verifies the JWT signature (RSA256) by given modulus.
-/// 2. Ensure the encoded `nonce` is included in the JWT token, verify the correctness of nonce.
-/// 3. Base64 decode the `nonce` fields into ascii numbers.
-/// 4. Check `nonce` == Poseidon([highpartPK, lowpartPK, exp, project_id]).
-/// 5. Output the public input `highpartPK, lowpartPK, exp, project_id`.
-/// 6. Output the `phone` fields into hash.
-///
-/// Inputs:
-/// - `jwt_segments`: Pad the JWT and split it into multiple segments to boost efficiency.
-/// - `jwt_sha256`: The SHA256 hash of the JWT.
-/// - `nonce`: Extract the base64 byte array of the `nonce` field from the JWT, verify the correctness.
-/// - `phone`: Extract the base64 byte array of the `phone` field from the JWT.
-/// - `nonce_loc`: The position of `nonce` in the JWT.
-/// - `phone_loc`: The position of `phone` in the JWT.
-/// - `signature`: Convert the Base64-encoded JWT signature string to a BigInt array that can be processed by the Circom circuit.
-/// - `modulus`: Extract the JWT `kid` field in the header to apply to the Google API for the public key to verify the JWT signature.
-/// - `highpartPK, lowpartPK`: Custom solana public key of Bigint type. 
-/// - `exp`: Custom public input as a preimage of the `nonce`.
-/// - `project_id`: Custom public input as a preimage of the `nonce`.
-///
-/// Outputs:
-/// - `phone_out_ascii_hash`: The hash value of the `phone` field. Details refer to the output document.
-
 template ZKLogin(
   nonce_claim_bytes,
   phone_claim_bytes,
@@ -129,7 +106,23 @@ template ZKLogin(
         mux2_phone[i].s <== isColon_phone_1 + isQuote_phone_1; 
         phone_num[i] <== mux2_phone[i].out;
     }
-   signal phone_out_ascii <== ConcatDigits(2, 16)(phone_num);
+
+    component clear_Quote_Comma[16];
+    signal clear_Quote[16];
+    signal clear_Comma[16];
+    signal clear_phone_num[16];
+
+    for(var i = 0; i < 16; i++ ){
+        clear_Comma[i] <== IsEqual()([phone_num[i],44]);
+        clear_Quote[i] <== IsEqual()([phone_num[i],34]);
+        clear_Quote_Comma[i] = Mux1(); 
+        clear_Quote_Comma[i].c[0] <== phone_num[i];
+        clear_Quote_Comma[i].c[1] <== 0;
+        clear_Quote_Comma[i].s <== clear_Comma[i]+clear_Quote[i];
+        clear_phone_num[i] <== clear_Quote_Comma[i].out;
+    }
+
+    signal phone_out_ascii <== ConcatDigits(2, 16)(clear_phone_num);
 
     component phone_hash = Poseidon(1);
     phone_hash.inputs[0] <== phone_out_ascii;
